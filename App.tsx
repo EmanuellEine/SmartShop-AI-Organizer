@@ -26,15 +26,15 @@ const App: React.FC = () => {
   const [isAutoOrganizing, setIsAutoOrganizing] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Load from local storage
   useEffect(() => {
-    const saved = localStorage.getItem('smart_shop_list');
-    if (saved) {
-      setItems(JSON.parse(saved));
+    try {
+      const saved = localStorage.getItem('smart_shop_list');
+      if (saved) setItems(JSON.parse(saved));
+    } catch (e) {
+      console.error("Falha ao carregar lista", e);
     }
   }, []);
 
-  // Save to local storage
   useEffect(() => {
     localStorage.setItem('smart_shop_list', JSON.stringify(items));
   }, [items]);
@@ -75,12 +75,17 @@ const App: React.FC = () => {
   const handleAutoOrganize = async () => {
     if (items.length === 0) return;
     setIsAutoOrganizing(true);
-    const categorizations = await autoCategorizeItems(items);
-    setItems(prev => prev.map(item => {
-      const match = categorizations.find(c => c.id === item.id);
-      return match ? { ...item, category: match.category } : item;
-    }));
-    setIsAutoOrganizing(false);
+    try {
+      const categorizations = await autoCategorizeItems(items);
+      setItems(prev => prev.map(item => {
+        const match = categorizations.find(c => c.id === item.id);
+        return match ? { ...item, category: match.category as Category } : item;
+      }));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsAutoOrganizing(false);
+    }
   };
 
   const addSuggestion = (suggestion: AISuggestion) => {
@@ -100,20 +105,17 @@ const App: React.FC = () => {
     return items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   }, [items]);
 
-  // Use explicit typing to avoid unknown inference issues
   const groupedItems = useMemo<Record<string, ShoppingItem[]>>(() => {
     const groups: Record<string, ShoppingItem[]> = {};
     items.forEach(item => {
       const category = item.category as string;
-      if (!groups[category]) {
-        groups[category] = [];
-      }
+      if (!groups[category]) groups[category] = [];
       groups[category].push(item);
     });
     return groups;
   }, [items]);
 
-  // Use explicit typing to avoid unknown inference issues (fixing errors on line 285 and 291)
+  // Fix: Explicitly typed useMemo return to avoid 'unknown' type errors on length and map
   const chartData = useMemo<{ name: string; value: number }[]>(() => {
     const categoriesMap: Record<string, number> = {};
     items.forEach(item => {
@@ -128,15 +130,14 @@ const App: React.FC = () => {
   const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6', '#f97316'];
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-24">
-      {/* Header - Alinhamento corrigido */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-4 h-16 md:px-8 flex items-center">
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-32">
+      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 px-4 h-16 md:px-8 flex items-center">
         <div className="max-w-5xl w-full mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-emerald-500 p-2 rounded-xl shadow-lg shadow-emerald-100 flex items-center justify-center">
+            <div className="bg-emerald-500 p-2 rounded-xl shadow-lg shadow-emerald-100">
               <ShoppingCartIcon className="w-5 h-5 text-white" />
             </div>
-            <h1 className="text-xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent hidden xs:block">
+            <h1 className="text-xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
               SmartShop AI
             </h1>
           </div>
@@ -148,7 +149,7 @@ const App: React.FC = () => {
               className="hidden sm:flex items-center gap-2 px-4 py-2 text-sm font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-all disabled:opacity-50 h-10 border border-indigo-100"
             >
               {isAutoOrganizing ? <Loader2Icon className="w-4 h-4 animate-spin" /> : <LayoutGridIcon className="w-4 h-4" />}
-              Organizar Categorias
+              Organizar Tudo
             </button>
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -162,9 +163,8 @@ const App: React.FC = () => {
 
       <main className="max-w-5xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
-          {/* Formulário de Adição - Melhor alinhamento e consistência de altura */}
           <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-            <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
               <PlusIcon className="w-4 h-4 text-emerald-500" />
               Adicionar Produto
             </h2>
@@ -172,13 +172,13 @@ const App: React.FC = () => {
               <input
                 type="text"
                 placeholder="Ex: Queijo Mussarela..."
-                className="flex-[2] px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white focus:outline-none transition-all text-sm"
+                className="flex-[2] px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white focus:outline-none transition-all text-sm"
                 value={newItemName}
                 onChange={(e) => setNewItemName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && addItem()}
               />
               <select
-                className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white focus:outline-none text-sm cursor-pointer"
+                className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white focus:outline-none text-sm cursor-pointer"
                 value={newItemCategory}
                 onChange={(e) => setNewItemCategory(e.target.value as Category)}
               >
@@ -188,37 +188,23 @@ const App: React.FC = () => {
               </select>
               <button
                 onClick={addItem}
-                className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-6 py-2.5 rounded-xl transition-all shadow-md shadow-emerald-100 active:scale-95 flex items-center justify-center gap-2"
+                className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-6 py-3 rounded-xl transition-all shadow-md shadow-emerald-100 active:scale-95 flex items-center justify-center gap-2"
               >
-                <span>Adicionar</span>
+                Adicionar
               </button>
             </div>
-            {/* Mobile-only auto-organize */}
-            <button 
-              onClick={handleAutoOrganize}
-              disabled={isAutoOrganizing || items.length === 0}
-              className="sm:hidden w-full mt-4 flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-xl disabled:opacity-50"
-            >
-              {isAutoOrganizing ? <Loader2Icon className="w-4 h-4 animate-spin" /> : <LayoutGridIcon className="w-4 h-4" />}
-              Auto-organizar Categorias
-            </button>
           </section>
 
-          {/* Sugestões Inteligentes */}
           <section className="bg-emerald-50 border border-emerald-100 p-6 rounded-2xl shadow-sm relative overflow-hidden group">
-            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-              <SparklesIcon className="w-16 h-16 text-emerald-600" />
-            </div>
-            
             <div className="flex items-center justify-between mb-4 relative z-10">
               <h2 className="text-sm font-bold text-emerald-800 uppercase tracking-widest flex items-center gap-2">
                 <SparklesIcon className="w-4 h-4 text-emerald-500" />
-                Dicas da IA
+                IA Sugestões
               </h2>
               <button
                 onClick={handleFetchSuggestions}
                 disabled={loadingSuggestions}
-                className="text-xs font-bold text-emerald-600 hover:text-emerald-700 disabled:opacity-50 flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm transition-all hover:shadow-md"
+                className="text-xs font-bold text-emerald-600 hover:text-emerald-700 disabled:opacity-50 flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm"
               >
                 {loadingSuggestions ? <Loader2Icon className="w-3 h-3 animate-spin" /> : <ArrowRightIcon className="w-3 h-3" />}
                 O QUE FALTA?
@@ -232,7 +218,7 @@ const App: React.FC = () => {
                     <div className="flex-1 pr-2">
                       <p className="font-bold text-slate-800 text-sm">{s.name}</p>
                       <p className="text-[10px] font-extrabold text-slate-400 uppercase mt-0.5">{s.category}</p>
-                      <p className="text-[10px] text-emerald-600 italic mt-1 leading-tight line-clamp-2">{s.reason}</p>
+                      <p className="text-[10px] text-emerald-600 italic mt-1 leading-tight">{s.reason}</p>
                     </div>
                     <button
                       onClick={() => addSuggestion(s)}
@@ -244,22 +230,21 @@ const App: React.FC = () => {
                 ))}
               </div>
             ) : !loadingSuggestions && (
-              <div className="text-center py-6 text-slate-500 relative z-10">
+              <div className="text-center py-6 text-slate-500">
                 <p className="text-xs font-medium italic">
-                  {items.length === 0 ? "Adicione itens para receber sugestões personalizadas." : "Clique em 'O que falta?' para ver recomendações."}
+                  {items.length === 0 ? "Comece sua lista para ver sugestões." : "Peça sugestões à IA acima."}
                 </p>
               </div>
             )}
             
             {loadingSuggestions && (
-              <div className="flex flex-col items-center justify-center py-8 space-y-3 relative z-10">
+              <div className="flex flex-col items-center justify-center py-8 space-y-3">
                 <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-                <p className="text-emerald-700 text-xs font-bold uppercase tracking-widest">Analisando sua lista...</p>
+                <p className="text-emerald-700 text-xs font-bold uppercase tracking-widest">Analisando...</p>
               </div>
             )}
           </section>
 
-          {/* Lista por Categorias */}
           <section className="space-y-6">
             <div className="flex items-center justify-between px-2">
               <h2 className="text-lg font-black text-slate-800">Sua Lista</h2>
@@ -268,21 +253,17 @@ const App: React.FC = () => {
                   onClick={() => setItems([])}
                   className="text-xs font-bold text-red-500 hover:text-red-600 flex items-center gap-1 bg-red-50 px-2 py-1 rounded-md"
                 >
-                  <TrashIcon className="w-3 h-3" />
                   LIMPAR TUDO
                 </button>
               )}
             </div>
             
             {items.length === 0 ? (
-              <div className="bg-white p-12 rounded-3xl border-2 border-dashed border-slate-200 text-center space-y-4 shadow-sm">
-                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto border border-slate-100">
+              <div className="bg-white p-12 rounded-3xl border-2 border-dashed border-slate-200 text-center space-y-4">
+                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto">
                   <ShoppingCartIcon className="w-10 h-10 text-slate-200" />
                 </div>
-                <div className="space-y-1">
-                  <p className="text-slate-600 font-bold">Carrinho Vazio</p>
-                  <p className="text-slate-400 text-sm">Adicione produtos acima para começar.</p>
-                </div>
+                <p className="text-slate-400 text-sm">Sua lista está vazia agora.</p>
               </div>
             ) : (
               <div className="space-y-8">
@@ -299,11 +280,11 @@ const App: React.FC = () => {
                       {catItems.map(item => (
                         <div 
                           key={item.id}
-                          className={`flex flex-col sm:flex-row items-center gap-4 bg-white p-4 rounded-2xl border shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 ${item.checked ? 'border-emerald-100 bg-emerald-50/10 opacity-60' : 'border-slate-200'}`}
+                          className={`flex flex-col sm:flex-row items-center gap-4 bg-white p-4 rounded-2xl border shadow-sm transition-all hover:shadow-md ${item.checked ? 'border-emerald-100 bg-emerald-50/10 opacity-60' : 'border-slate-200'}`}
                         >
                           <button 
                             onClick={() => toggleItem(item.id)}
-                            className={`flex-shrink-0 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${item.checked ? 'bg-emerald-500 border-emerald-500 text-white rotate-0' : 'border-slate-200 bg-slate-50 rotate-90'}`}
+                            className={`flex-shrink-0 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${item.checked ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-200 bg-slate-50'}`}
                           >
                             {item.checked && <CheckCircleIcon className="w-4 h-4" />}
                           </button>
@@ -315,38 +296,35 @@ const App: React.FC = () => {
                           </div>
 
                           <div className="flex items-center gap-4 w-full sm:w-auto">
-                            <div className="flex items-center bg-slate-50 border border-slate-100 rounded-xl p-1 shadow-inner">
+                            <div className="flex items-center bg-slate-50 border border-slate-100 rounded-xl p-1">
                               <button 
                                 onClick={() => updateItem(item.id, { quantity: Math.max(1, item.quantity - 1) })}
-                                className="w-8 h-8 flex items-center justify-center hover:bg-white rounded-lg transition-all text-slate-500 hover:text-emerald-600 font-black text-lg"
+                                className="w-8 h-8 flex items-center justify-center hover:bg-white rounded-lg transition-all text-slate-500 font-black"
                               >
                                 -
                               </button>
                               <span className="w-8 text-center text-sm font-black text-slate-700">{item.quantity}</span>
                               <button 
                                 onClick={() => updateItem(item.id, { quantity: item.quantity + 1 })}
-                                className="w-8 h-8 flex items-center justify-center hover:bg-white rounded-lg transition-all text-slate-500 hover:text-emerald-600 font-black text-lg"
+                                className="w-8 h-8 flex items-center justify-center hover:bg-white rounded-lg transition-all text-slate-500 font-black"
                               >
                                 +
                               </button>
                             </div>
 
-                            <div className="relative flex-1 sm:w-32 group/price">
-                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-black group-focus-within/price:text-emerald-500 transition-colors">R$</span>
+                            <div className="relative flex-1 sm:w-32">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-black">R$</span>
                               <input
                                 type="number"
                                 step="0.01"
                                 placeholder="0,00"
-                                className="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-emerald-500 focus:bg-white focus:border-transparent outline-none transition-all shadow-inner"
+                                className="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
                                 value={item.price === 0 ? '' : item.price}
                                 onChange={(e) => updateItem(item.id, { price: parseFloat(e.target.value) || 0 })}
                               />
                             </div>
 
-                            <button 
-                              onClick={() => removeItem(item.id)}
-                              className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                            >
+                            <button onClick={() => removeItem(item.id)} className="p-2 text-slate-300 hover:text-red-500">
                               <TrashIcon className="w-5 h-5" />
                             </button>
                           </div>
@@ -360,21 +338,15 @@ const App: React.FC = () => {
           </section>
         </div>
 
-        {/* Resumo Lateral - Sidebar com alinhamento refinado */}
         <aside className={`lg:block ${isSidebarOpen ? 'fixed inset-0 z-50 bg-white p-8 overflow-y-auto' : 'hidden'}`}>
           <div className="sticky top-24 space-y-6">
             {isSidebarOpen && (
-              <button 
-                onClick={() => setIsSidebarOpen(false)}
-                className="mb-8 flex items-center gap-2 text-slate-800 font-black text-sm uppercase tracking-widest"
-              >
-                <XCircleIcon className="w-6 h-6 text-red-500" /> FECHAR RESUMO
+              <button onClick={() => setIsSidebarOpen(false)} className="mb-8 flex items-center gap-2 text-slate-800 font-black text-sm uppercase tracking-widest">
+                <XCircleIcon className="w-6 h-6 text-red-500" /> FECHAR
               </button>
             )}
 
-            <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl overflow-hidden relative group">
-              <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/10 blur-[80px] rounded-full -mr-16 -mt-16 group-hover:scale-125 transition-transform duration-700"></div>
-              
+            <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden group">
               <div className="relative z-10">
                 <h3 className="text-slate-500 text-[10px] font-black mb-1 uppercase tracking-[0.3em]">Previsão Total</h3>
                 <div className="flex items-baseline gap-1 mb-10">
@@ -386,20 +358,13 @@ const App: React.FC = () => {
                 
                 <div className="space-y-6 pt-10 border-t border-slate-800">
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Produtos</span>
+                    <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Itens</span>
                     <span className="font-black text-lg">{items.reduce((acc, i) => acc + i.quantity, 0)}</span>
                   </div>
-                  
                   <div className="space-y-3">
-                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-500">
-                      <span>Progresso da Compra</span>
-                      <span className="text-emerald-400">
-                        {items.length > 0 ? Math.round((items.filter(i => i.checked).length / items.length) * 100) : 0}%
-                      </span>
-                    </div>
-                    <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden p-0.5">
+                    <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
                       <div 
-                        className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full transition-all duration-1000 ease-out" 
+                        className="h-full bg-emerald-500 transition-all duration-700" 
                         style={{ width: `${items.length > 0 ? (items.filter(i => i.checked).length / items.length) * 100 : 0}%` }}
                       />
                     </div>
@@ -409,11 +374,7 @@ const App: React.FC = () => {
             </div>
 
             <div className="bg-white rounded-[2rem] p-8 border border-slate-200 shadow-sm">
-              <h3 className="font-black text-slate-800 text-xs uppercase tracking-widest mb-8 flex items-center gap-2">
-                <ChartPieIcon className="w-4 h-4 text-indigo-500" />
-                Gastos por Categoria
-              </h3>
-              
+              <h3 className="font-black text-slate-800 text-xs uppercase tracking-widest mb-8">Por Categoria</h3>
               {chartData.length > 0 ? (
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -422,62 +383,35 @@ const App: React.FC = () => {
                         data={chartData}
                         cx="50%"
                         cy="50%"
-                        innerRadius={65}
-                        outerRadius={85}
-                        paddingAngle={8}
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
                         dataKey="value"
-                        stroke="none"
                       >
                         {chartData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip 
-                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', fontWeight: '800' }}
-                        formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Total']}
-                      />
+                      <Tooltip />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
-              ) : (
-                <div className="text-center py-12 text-slate-300 text-xs font-bold uppercase tracking-widest italic">
-                  Sem dados para exibir
-                </div>
-              )}
-
-              <div className="mt-6 space-y-3">
-                {chartData.map((data, idx) => (
-                  <div key={data.name} className="flex items-center justify-between group">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2.5 h-2.5 rounded-full ring-4 ring-slate-50" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
-                      <span className="text-slate-500 text-[10px] font-black uppercase tracking-tight group-hover:text-slate-800 transition-colors">{data.name}</span>
-                    </div>
-                    <span className="text-slate-900 font-black text-xs">R$ {data.value.toFixed(2)}</span>
-                  </div>
-                ))}
-              </div>
+              ) : <div className="text-center py-10 text-slate-300 text-xs italic">Sem dados</div>}
             </div>
           </div>
         </aside>
       </main>
 
-      {/* Barra de Total Flutuante (Mobile) - Design Refinado */}
-      <div className="lg:hidden fixed bottom-6 left-6 right-6 z-40">
-        <div className="bg-white/90 backdrop-blur-xl border border-white/20 p-5 rounded-[2rem] shadow-2xl shadow-emerald-900/10 flex items-center justify-between">
-          <div>
-            <p className="text-[10px] text-slate-400 uppercase font-black tracking-[0.2em] mb-0.5">Total Estimado</p>
-            <p className="text-2xl font-black text-slate-900 leading-none">
-              <span className="text-emerald-500 text-sm mr-1">R$</span>
-              {totalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
-          </div>
-          <button 
-            onClick={() => setIsSidebarOpen(true)}
-            className="bg-slate-900 text-white h-14 w-14 rounded-2xl flex items-center justify-center shadow-xl shadow-slate-200 active:scale-90 transition-all"
-          >
-            <ChartPieIcon className="w-6 h-6" />
-          </button>
+      <div className="lg:hidden fixed bottom-6 left-6 right-6 z-40 bg-white p-5 rounded-[2rem] shadow-2xl flex items-center justify-between border border-slate-100">
+        <div>
+          <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Previsão</p>
+          <p className="text-2xl font-black text-slate-900 leading-none">
+            R$ {totalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
         </div>
+        <button onClick={() => setIsSidebarOpen(true)} className="bg-slate-900 text-white h-14 w-14 rounded-2xl flex items-center justify-center">
+          <ChartPieIcon className="w-6 h-6" />
+        </button>
       </div>
     </div>
   );

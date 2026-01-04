@@ -2,8 +2,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Category, ShoppingItem, AISuggestion } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
+// Fix: Creating the GoogleGenAI instance inside functions to ensure fresh state/key
 export const getForgottenSuggestions = async (currentItems: ShoppingItem[]): Promise<AISuggestion[]> => {
   const itemNames = currentItems.map(item => item.name).join(", ");
   
@@ -15,6 +14,8 @@ export const getForgottenSuggestions = async (currentItems: ShoppingItem[]): Pro
   `;
 
   try {
+    // Fix: Using new GoogleGenAI({apiKey: process.env.API_KEY}) directly as per guidelines
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
@@ -39,11 +40,8 @@ export const getForgottenSuggestions = async (currentItems: ShoppingItem[]): Pro
       }
     });
 
-    // Directly access .text property which is a getter returning string | undefined
     const text = response.text;
-    if (!text) {
-      return [];
-    }
+    if (!text) return [];
     return JSON.parse(text) as AISuggestion[];
   } catch (error) {
     console.error("Erro ao obter sugestões do Gemini:", error);
@@ -63,6 +61,8 @@ export const autoCategorizeItems = async (items: ShoppingItem[]): Promise<{ id: 
   `;
 
   try {
+    // Fix: Using new GoogleGenAI({apiKey: process.env.API_KEY}) directly as per guidelines
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
@@ -82,11 +82,8 @@ export const autoCategorizeItems = async (items: ShoppingItem[]): Promise<{ id: 
       }
     });
 
-    // Directly access .text property which is a getter returning string | undefined
     const text = response.text;
-    if (!text) {
-      return [];
-    }
+    if (!text) return [];
     return JSON.parse(text);
   } catch (error) {
     console.error("Erro ao auto-categorizar:", error);
