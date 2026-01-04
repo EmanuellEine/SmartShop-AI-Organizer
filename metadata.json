@@ -1,0 +1,5 @@
+{
+  "name": "SmartShop AI Organizer",
+  "description": "An intelligent grocery list organizer that uses AI to suggest forgotten items and predicts total costs based on your typical spending.",
+  "requestFramePermissions": []
+}
