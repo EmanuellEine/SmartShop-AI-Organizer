@@ -13,7 +13,7 @@ export const getForgottenSuggestions = async (currentItems: ShoppingItem[]): Pro
   `;
 
   try {
-    // Initializing GoogleGenAI directly with process.env.API_KEY as per guidelines.
+    // Inicialização interna para maior resiliência em ambientes de produção
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -60,7 +60,6 @@ export const autoCategorizeItems = async (items: ShoppingItem[]): Promise<{ id: 
   `;
 
   try {
-    // Initializing GoogleGenAI directly with process.env.API_KEY as per guidelines.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",

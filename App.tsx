@@ -10,7 +10,6 @@ import {
   ChartPieIcon,
   CheckCircleIcon,
   XCircleIcon,
-  ChevronRightIcon,
   LayoutGridIcon,
   ArrowRightIcon,
   Loader2Icon
@@ -29,14 +28,21 @@ const App: React.FC = () => {
   useEffect(() => {
     try {
       const saved = localStorage.getItem('smart_shop_list');
-      if (saved) setItems(JSON.parse(saved));
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) setItems(parsed);
+      }
     } catch (e) {
-      console.error("Falha ao carregar lista", e);
+      console.error("Erro ao carregar do storage:", e);
     }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('smart_shop_list', JSON.stringify(items));
+    try {
+      localStorage.setItem('smart_shop_list', JSON.stringify(items));
+    } catch (e) {
+      console.error("Erro ao salvar no storage:", e);
+    }
   }, [items]);
 
   const addItem = useCallback(() => {
@@ -67,11 +73,14 @@ const App: React.FC = () => {
 
   const handleFetchSuggestions = async () => {
     setLoadingSuggestions(true);
-    const result = await getForgottenSuggestions(items);
-    if (result && result.length > 0) {
-      setSuggestions(result);
+    try {
+      const result = await getForgottenSuggestions(items);
+      if (Array.isArray(result)) setSuggestions(result);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingSuggestions(false);
     }
-    setLoadingSuggestions(false);
   };
 
   const handleAutoOrganize = async () => {
@@ -79,7 +88,7 @@ const App: React.FC = () => {
     setIsAutoOrganizing(true);
     try {
       const categorizations = await autoCategorizeItems(items);
-      if (categorizations && categorizations.length > 0) {
+      if (Array.isArray(categorizations)) {
         setItems(prev => prev.map(item => {
           const match = categorizations.find(c => c.id === item.id);
           return match ? { ...item, category: match.category as Category } : item;
@@ -106,9 +115,10 @@ const App: React.FC = () => {
   };
 
   const totalPrice = useMemo(() => {
-    return items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+    return items.reduce((acc, item) => acc + (Number(item.price || 0) * Number(item.quantity || 1)), 0);
   }, [items]);
 
+  // Fix: Explicitly defining generic type for groupedItems useMemo to prevent 'unknown' inference during property access
   const groupedItems = useMemo<Record<string, ShoppingItem[]>>(() => {
     const groups: Record<string, ShoppingItem[]> = {};
     items.forEach(item => {
@@ -119,12 +129,13 @@ const App: React.FC = () => {
     return groups;
   }, [items]);
 
-  // Fix: Explicitly defining chartData type to fix "unknown" errors on lines 277 and 283.
-  const chartData: { name: string; value: number }[] = useMemo(() => {
+  // Fix: Explicitly defining generic type for chartData useMemo to prevent 'unknown' inference during length/map property access
+  const chartData = useMemo<{ name: string; value: number }[]>(() => {
     const categoriesMap: Record<string, number> = {};
     items.forEach(item => {
       const cat = item.category as string;
-      categoriesMap[cat] = (categoriesMap[cat] || 0) + (item.price * item.quantity);
+      const val = Number(item.price || 0) * Number(item.quantity || 1);
+      categoriesMap[cat] = (categoriesMap[cat] || 0) + val;
     });
     return Object.entries(categoriesMap)
       .map(([name, value]) => ({ name, value }))
@@ -135,7 +146,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-32">
-      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 px-4 h-16 md:px-8 flex items-center">
+      <header className="bg-white/90 backdrop-blur-sm border-b border-slate-200 sticky top-0 z-30 px-4 h-16 md:px-8 flex items-center">
         <div className="max-w-5xl w-full mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="bg-emerald-500 p-2 rounded-xl shadow-lg shadow-emerald-100 flex items-center justify-center">
@@ -302,14 +313,14 @@ const App: React.FC = () => {
                           <div className="flex items-center gap-4 w-full sm:w-auto">
                             <div className="flex items-center bg-slate-50 border border-slate-100 rounded-xl p-1">
                               <button 
-                                onClick={() => updateItem(item.id, { quantity: Math.max(1, item.quantity - 1) })}
+                                onClick={() => updateItem(item.id, { quantity: Math.max(1, (item.quantity || 1) - 1) })}
                                 className="w-8 h-8 flex items-center justify-center hover:bg-white rounded-lg transition-all text-slate-500 font-black text-lg"
                               >
                                 -
                               </button>
                               <span className="w-8 text-center text-sm font-black text-slate-700">{item.quantity}</span>
                               <button 
-                                onClick={() => updateItem(item.id, { quantity: item.quantity + 1 })}
+                                onClick={() => updateItem(item.id, { quantity: (item.quantity || 1) + 1 })}
                                 className="w-8 h-8 flex items-center justify-center hover:bg-white rounded-lg transition-all text-slate-500 font-black text-lg"
                               >
                                 +
@@ -363,7 +374,7 @@ const App: React.FC = () => {
                 <div className="space-y-6 pt-10 border-t border-slate-800">
                   <div className="flex justify-between items-center">
                     <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Total de Itens</span>
-                    <span className="font-black text-lg">{items.reduce((acc, i) => acc + i.quantity, 0)}</span>
+                    <span className="font-black text-lg">{items.reduce((acc, i) => acc + (i.quantity || 1), 0)}</span>
                   </div>
                   <div className="space-y-3">
                     <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-500">
@@ -389,7 +400,7 @@ const App: React.FC = () => {
                 Gastos por Categoria
               </h3>
               
-              {chartData.length > 0 ? (
+              {chartData && chartData.length > 0 ? (
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -421,7 +432,7 @@ const App: React.FC = () => {
               )}
 
               <div className="mt-6 space-y-3">
-                {chartData.map((data, idx) => (
+                {chartData && chartData.map((data, idx) => (
                   <div key={data.name} className="flex items-center justify-between group">
                     <div className="flex items-center gap-3">
                       <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
@@ -436,14 +447,14 @@ const App: React.FC = () => {
         </aside>
       </main>
 
-      <div className="lg:hidden fixed bottom-6 left-6 right-6 z-40 bg-white/90 backdrop-blur-xl border border-white/20 p-5 rounded-[2rem] shadow-2xl flex items-center justify-between">
+      <div className="lg:hidden fixed bottom-6 left-6 right-6 z-40 bg-white/95 backdrop-blur-xl border border-slate-200 p-5 rounded-[2rem] shadow-2xl flex items-center justify-between">
         <div>
           <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest mb-0.5">Previsão</p>
           <p className="text-2xl font-black text-slate-900 leading-none">
             R$ {totalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
         </div>
-        <button onClick={() => setIsSidebarOpen(true)} className="bg-slate-900 text-white h-14 w-14 rounded-2xl flex items-center justify-center shadow-xl">
+        <button onClick={() => setIsSidebarOpen(true)} className="bg-slate-900 text-white h-14 w-14 rounded-2xl flex items-center justify-center shadow-xl active:scale-90 transition-transform">
           <ChartPieIcon className="w-6 h-6" />
         </button>
       </div>
