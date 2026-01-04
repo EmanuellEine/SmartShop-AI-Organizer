@@ -2,7 +2,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Category, ShoppingItem, AISuggestion } from "../types";
 
-// Fix: Creating the GoogleGenAI instance inside functions to ensure fresh state/key
 export const getForgottenSuggestions = async (currentItems: ShoppingItem[]): Promise<AISuggestion[]> => {
   const itemNames = currentItems.map(item => item.name).join(", ");
   
@@ -14,7 +13,7 @@ export const getForgottenSuggestions = async (currentItems: ShoppingItem[]): Pro
   `;
 
   try {
-    // Fix: Using new GoogleGenAI({apiKey: process.env.API_KEY}) directly as per guidelines
+    // Initializing GoogleGenAI directly with process.env.API_KEY as per guidelines.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -61,7 +60,7 @@ export const autoCategorizeItems = async (items: ShoppingItem[]): Promise<{ id: 
   `;
 
   try {
-    // Fix: Using new GoogleGenAI({apiKey: process.env.API_KEY}) directly as per guidelines
+    // Initializing GoogleGenAI directly with process.env.API_KEY as per guidelines.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -84,7 +83,7 @@ export const autoCategorizeItems = async (items: ShoppingItem[]): Promise<{ id: 
 
     const text = response.text;
     if (!text) return [];
-    return JSON.parse(text);
+    return JSON.parse(text) as { id: string, category: Category }[];
   } catch (error) {
     console.error("Erro ao auto-categorizar:", error);
     return [];

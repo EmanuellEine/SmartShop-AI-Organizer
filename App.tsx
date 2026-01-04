@@ -68,7 +68,9 @@ const App: React.FC = () => {
   const handleFetchSuggestions = async () => {
     setLoadingSuggestions(true);
     const result = await getForgottenSuggestions(items);
-    setSuggestions(result);
+    if (result && result.length > 0) {
+      setSuggestions(result);
+    }
     setLoadingSuggestions(false);
   };
 
@@ -77,10 +79,12 @@ const App: React.FC = () => {
     setIsAutoOrganizing(true);
     try {
       const categorizations = await autoCategorizeItems(items);
-      setItems(prev => prev.map(item => {
-        const match = categorizations.find(c => c.id === item.id);
-        return match ? { ...item, category: match.category as Category } : item;
-      }));
+      if (categorizations && categorizations.length > 0) {
+        setItems(prev => prev.map(item => {
+          const match = categorizations.find(c => c.id === item.id);
+          return match ? { ...item, category: match.category as Category } : item;
+        }));
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -115,8 +119,8 @@ const App: React.FC = () => {
     return groups;
   }, [items]);
 
-  // Fix: Explicitly typed useMemo return to avoid 'unknown' type errors on length and map
-  const chartData = useMemo<{ name: string; value: number }[]>(() => {
+  // Fix: Explicitly defining chartData type to fix "unknown" errors on lines 277 and 283.
+  const chartData: { name: string; value: number }[] = useMemo(() => {
     const categoriesMap: Record<string, number> = {};
     items.forEach(item => {
       const cat = item.category as string;
@@ -134,7 +138,7 @@ const App: React.FC = () => {
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 px-4 h-16 md:px-8 flex items-center">
         <div className="max-w-5xl w-full mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-emerald-500 p-2 rounded-xl shadow-lg shadow-emerald-100">
+            <div className="bg-emerald-500 p-2 rounded-xl shadow-lg shadow-emerald-100 flex items-center justify-center">
               <ShoppingCartIcon className="w-5 h-5 text-white" />
             </div>
             <h1 className="text-xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
@@ -188,7 +192,7 @@ const App: React.FC = () => {
               </select>
               <button
                 onClick={addItem}
-                className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-6 py-3 rounded-xl transition-all shadow-md shadow-emerald-100 active:scale-95 flex items-center justify-center gap-2"
+                className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-6 py-3 rounded-xl transition-all shadow-md shadow-emerald-100 active:scale-95 flex items-center justify-center"
               >
                 Adicionar
               </button>
@@ -199,12 +203,12 @@ const App: React.FC = () => {
             <div className="flex items-center justify-between mb-4 relative z-10">
               <h2 className="text-sm font-bold text-emerald-800 uppercase tracking-widest flex items-center gap-2">
                 <SparklesIcon className="w-4 h-4 text-emerald-500" />
-                IA Sugestões
+                Dicas da IA
               </h2>
               <button
                 onClick={handleFetchSuggestions}
                 disabled={loadingSuggestions}
-                className="text-xs font-bold text-emerald-600 hover:text-emerald-700 disabled:opacity-50 flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm"
+                className="text-xs font-bold text-emerald-600 hover:text-emerald-700 disabled:opacity-50 flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm transition-all"
               >
                 {loadingSuggestions ? <Loader2Icon className="w-3 h-3 animate-spin" /> : <ArrowRightIcon className="w-3 h-3" />}
                 O QUE FALTA?
@@ -218,7 +222,7 @@ const App: React.FC = () => {
                     <div className="flex-1 pr-2">
                       <p className="font-bold text-slate-800 text-sm">{s.name}</p>
                       <p className="text-[10px] font-extrabold text-slate-400 uppercase mt-0.5">{s.category}</p>
-                      <p className="text-[10px] text-emerald-600 italic mt-1 leading-tight">{s.reason}</p>
+                      <p className="text-[10px] text-emerald-600 italic mt-1 leading-tight line-clamp-2">{s.reason}</p>
                     </div>
                     <button
                       onClick={() => addSuggestion(s)}
@@ -230,17 +234,17 @@ const App: React.FC = () => {
                 ))}
               </div>
             ) : !loadingSuggestions && (
-              <div className="text-center py-6 text-slate-500">
+              <div className="text-center py-6 text-slate-500 relative z-10">
                 <p className="text-xs font-medium italic">
-                  {items.length === 0 ? "Comece sua lista para ver sugestões." : "Peça sugestões à IA acima."}
+                  {items.length === 0 ? "Adicione itens para receber sugestões personalizadas." : "Clique em 'O que falta?' para ver recomendações."}
                 </p>
               </div>
             )}
             
             {loadingSuggestions && (
-              <div className="flex flex-col items-center justify-center py-8 space-y-3">
+              <div className="flex flex-col items-center justify-center py-8 space-y-3 relative z-10">
                 <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-                <p className="text-emerald-700 text-xs font-bold uppercase tracking-widest">Analisando...</p>
+                <p className="text-emerald-700 text-xs font-bold uppercase tracking-widest">Analisando sua lista...</p>
               </div>
             )}
           </section>
@@ -260,10 +264,10 @@ const App: React.FC = () => {
             
             {items.length === 0 ? (
               <div className="bg-white p-12 rounded-3xl border-2 border-dashed border-slate-200 text-center space-y-4">
-                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto">
+                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto border border-slate-100">
                   <ShoppingCartIcon className="w-10 h-10 text-slate-200" />
                 </div>
-                <p className="text-slate-400 text-sm">Sua lista está vazia agora.</p>
+                <p className="text-slate-400 text-sm font-medium">Seu carrinho está esperando por produtos!</p>
               </div>
             ) : (
               <div className="space-y-8">
@@ -299,14 +303,14 @@ const App: React.FC = () => {
                             <div className="flex items-center bg-slate-50 border border-slate-100 rounded-xl p-1">
                               <button 
                                 onClick={() => updateItem(item.id, { quantity: Math.max(1, item.quantity - 1) })}
-                                className="w-8 h-8 flex items-center justify-center hover:bg-white rounded-lg transition-all text-slate-500 font-black"
+                                className="w-8 h-8 flex items-center justify-center hover:bg-white rounded-lg transition-all text-slate-500 font-black text-lg"
                               >
                                 -
                               </button>
                               <span className="w-8 text-center text-sm font-black text-slate-700">{item.quantity}</span>
                               <button 
                                 onClick={() => updateItem(item.id, { quantity: item.quantity + 1 })}
-                                className="w-8 h-8 flex items-center justify-center hover:bg-white rounded-lg transition-all text-slate-500 font-black"
+                                className="w-8 h-8 flex items-center justify-center hover:bg-white rounded-lg transition-all text-slate-500 font-black text-lg"
                               >
                                 +
                               </button>
@@ -318,13 +322,13 @@ const App: React.FC = () => {
                                 type="number"
                                 step="0.01"
                                 placeholder="0,00"
-                                className="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
+                                className="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                                 value={item.price === 0 ? '' : item.price}
                                 onChange={(e) => updateItem(item.id, { price: parseFloat(e.target.value) || 0 })}
                               />
                             </div>
 
-                            <button onClick={() => removeItem(item.id)} className="p-2 text-slate-300 hover:text-red-500">
+                            <button onClick={() => removeItem(item.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
                               <TrashIcon className="w-5 h-5" />
                             </button>
                           </div>
@@ -342,7 +346,7 @@ const App: React.FC = () => {
           <div className="sticky top-24 space-y-6">
             {isSidebarOpen && (
               <button onClick={() => setIsSidebarOpen(false)} className="mb-8 flex items-center gap-2 text-slate-800 font-black text-sm uppercase tracking-widest">
-                <XCircleIcon className="w-6 h-6 text-red-500" /> FECHAR
+                <XCircleIcon className="w-6 h-6 text-red-500" /> FECHAR RESUMO
               </button>
             )}
 
@@ -358,13 +362,19 @@ const App: React.FC = () => {
                 
                 <div className="space-y-6 pt-10 border-t border-slate-800">
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Itens</span>
+                    <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Total de Itens</span>
                     <span className="font-black text-lg">{items.reduce((acc, i) => acc + i.quantity, 0)}</span>
                   </div>
                   <div className="space-y-3">
+                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      <span>Progresso</span>
+                      <span className="text-emerald-400">
+                        {items.length > 0 ? Math.round((items.filter(i => i.checked).length / items.length) * 100) : 0}%
+                      </span>
+                    </div>
                     <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
                       <div 
-                        className="h-full bg-emerald-500 transition-all duration-700" 
+                        className="h-full bg-emerald-500 transition-all duration-1000 ease-out" 
                         style={{ width: `${items.length > 0 ? (items.filter(i => i.checked).length / items.length) * 100 : 0}%` }}
                       />
                     </div>
@@ -374,7 +384,11 @@ const App: React.FC = () => {
             </div>
 
             <div className="bg-white rounded-[2rem] p-8 border border-slate-200 shadow-sm">
-              <h3 className="font-black text-slate-800 text-xs uppercase tracking-widest mb-8">Por Categoria</h3>
+              <h3 className="font-black text-slate-800 text-xs uppercase tracking-widest mb-8 flex items-center gap-2">
+                <ChartPieIcon className="w-4 h-4 text-indigo-500" />
+                Gastos por Categoria
+              </h3>
+              
               {chartData.length > 0 ? (
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -383,33 +397,53 @@ const App: React.FC = () => {
                         data={chartData}
                         cx="50%"
                         cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={5}
+                        innerRadius={65}
+                        outerRadius={85}
+                        paddingAngle={8}
                         dataKey="value"
+                        stroke="none"
                       >
                         {chartData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip />
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', fontWeight: '800' }}
+                        formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Total']}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
-              ) : <div className="text-center py-10 text-slate-300 text-xs italic">Sem dados</div>}
+              ) : (
+                <div className="text-center py-12 text-slate-300 text-xs font-bold uppercase tracking-widest italic border border-dashed border-slate-100 rounded-2xl">
+                  Sem dados para exibir
+                </div>
+              )}
+
+              <div className="mt-6 space-y-3">
+                {chartData.map((data, idx) => (
+                  <div key={data.name} className="flex items-center justify-between group">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
+                      <span className="text-slate-500 text-[10px] font-black uppercase tracking-tight group-hover:text-slate-800 transition-colors">{data.name}</span>
+                    </div>
+                    <span className="text-slate-900 font-black text-xs">R$ {data.value.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </aside>
       </main>
 
-      <div className="lg:hidden fixed bottom-6 left-6 right-6 z-40 bg-white p-5 rounded-[2rem] shadow-2xl flex items-center justify-between border border-slate-100">
+      <div className="lg:hidden fixed bottom-6 left-6 right-6 z-40 bg-white/90 backdrop-blur-xl border border-white/20 p-5 rounded-[2rem] shadow-2xl flex items-center justify-between">
         <div>
-          <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Previsão</p>
+          <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest mb-0.5">Previsão</p>
           <p className="text-2xl font-black text-slate-900 leading-none">
             R$ {totalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
         </div>
-        <button onClick={() => setIsSidebarOpen(true)} className="bg-slate-900 text-white h-14 w-14 rounded-2xl flex items-center justify-center">
+        <button onClick={() => setIsSidebarOpen(true)} className="bg-slate-900 text-white h-14 w-14 rounded-2xl flex items-center justify-center shadow-xl">
           <ChartPieIcon className="w-6 h-6" />
         </button>
       </div>
