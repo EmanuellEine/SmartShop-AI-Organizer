@@ -24,6 +24,7 @@ const App: React.FC = () => {
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [isAutoOrganizing, setIsAutoOrganizing] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -47,16 +48,20 @@ const App: React.FC = () => {
 
   const addItem = useCallback(() => {
     if (!newItemName.trim()) return;
-    const newItem: ShoppingItem = {
-      id: crypto.randomUUID(),
-      name: newItemName,
-      price: 0,
-      quantity: 1,
-      category: newItemCategory,
-      checked: false
-    };
-    setItems(prev => [...prev, newItem]);
-    setNewItemName('');
+    try {
+      const newItem: ShoppingItem = {
+        id: crypto.randomUUID(),
+        name: newItemName,
+        price: 0,
+        quantity: 1,
+        category: newItemCategory,
+        checked: false
+      };
+      setItems(prev => [...prev, newItem]);
+      setNewItemName('');
+    } catch (e) {
+      setError("Erro ao adicionar item. Verifique se seu navegador é moderno.");
+    }
   }, [newItemName, newItemCategory]);
 
   const toggleItem = (id: string) => {
@@ -75,9 +80,11 @@ const App: React.FC = () => {
     setLoadingSuggestions(true);
     try {
       const result = await getForgottenSuggestions(items);
-      if (Array.isArray(result)) setSuggestions(result);
+      if (Array.isArray(result)) {
+        setSuggestions(result);
+      }
     } catch (e) {
-      console.error(e);
+      console.error("Erro na IA:", e);
     } finally {
       setLoadingSuggestions(false);
     }
@@ -95,7 +102,7 @@ const App: React.FC = () => {
         }));
       }
     } catch (e) {
-      console.error(e);
+      console.error("Erro na organização:", e);
     } finally {
       setIsAutoOrganizing(false);
     }
@@ -118,22 +125,21 @@ const App: React.FC = () => {
     return items.reduce((acc, item) => acc + (Number(item.price || 0) * Number(item.quantity || 1)), 0);
   }, [items]);
 
-  // Fix: Explicitly defining generic type for groupedItems useMemo to prevent 'unknown' inference during property access
   const groupedItems = useMemo<Record<string, ShoppingItem[]>>(() => {
     const groups: Record<string, ShoppingItem[]> = {};
     items.forEach(item => {
-      const category = item.category as string;
+      const category = (item.category as string) || 'Outros';
       if (!groups[category]) groups[category] = [];
       groups[category].push(item);
     });
     return groups;
   }, [items]);
 
-  // Fix: Explicitly defining generic type for chartData useMemo to prevent 'unknown' inference during length/map property access
-  const chartData = useMemo<{ name: string; value: number }[]>(() => {
+  // Fix: Explicitly typing the variable to avoid 'unknown' type issues in JSX which causes errors at line 309 and 315
+  const chartData: { name: string; value: number }[] = useMemo(() => {
     const categoriesMap: Record<string, number> = {};
     items.forEach(item => {
-      const cat = item.category as string;
+      const cat = (item.category as string) || 'Outros';
       const val = Number(item.price || 0) * Number(item.quantity || 1);
       categoriesMap[cat] = (categoriesMap[cat] || 0) + val;
     });
@@ -144,9 +150,24 @@ const App: React.FC = () => {
 
   const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6', '#f97316'];
 
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+        <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full text-center">
+          <XCircleIcon className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold mb-2">Ops! Algo deu errado</h2>
+          <p className="text-slate-500 mb-6">{error}</p>
+          <button onClick={() => window.location.reload()} className="bg-emerald-500 text-white px-6 py-2 rounded-xl font-bold">
+            Recarregar Site
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-32">
-      <header className="bg-white/90 backdrop-blur-sm border-b border-slate-200 sticky top-0 z-30 px-4 h-16 md:px-8 flex items-center">
+      <header className="bg-white/90 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 px-4 h-16 md:px-8 flex items-center">
         <div className="max-w-5xl w-full mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="bg-emerald-500 p-2 rounded-xl shadow-lg shadow-emerald-100 flex items-center justify-center">
@@ -432,7 +453,7 @@ const App: React.FC = () => {
               )}
 
               <div className="mt-6 space-y-3">
-                {chartData && chartData.map((data, idx) => (
+                {chartData && chartData.map((data: { name: string; value: number }, idx: number) => (
                   <div key={data.name} className="flex items-center justify-between group">
                     <div className="flex items-center gap-3">
                       <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
