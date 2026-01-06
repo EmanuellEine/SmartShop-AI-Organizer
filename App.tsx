@@ -78,15 +78,15 @@ const App: React.FC = () => {
       setSuggestions(Array.isArray(result) ? result : []);
     } catch (e: any) {
       console.error("Falha na busca de sugestões:", e);
-      if (e.message === "API_KEY_MISSING" || !process.env.API_KEY) {
+      if (e.message === "API_KEY_MISSING") {
         setAiError({
-          title: "Chave API não encontrada",
-          message: "Se você estiver no GitHub Pages, lembre-se que variáveis de ambiente precisam ser injetadas via GitHub Actions ou hardcoded (não recomendado)."
+          title: "Chave API não configurada",
+          message: "A chave API não foi encontrada no ambiente de execução. Certifique-se de que a variável de ambiente API_KEY está configurada."
         });
       } else if (e.message === "API_KEY_INVALID") {
         setAiError({
           title: "Chave API Inválida",
-          message: "A chave configurada parece não ser válida ou não tem acesso ao modelo Gemini."
+          message: "A chave configurada parece não ser válida ou não tem acesso ao modelo Gemini 3."
         });
       } else {
         setAiError({
@@ -111,7 +111,7 @@ const App: React.FC = () => {
         }));
       }
     } catch (e: any) {
-      console.error("Erro na organização:", e);
+      alert(e.message === "API_KEY_MISSING" ? "Erro: API_KEY não configurada no servidor." : "Erro ao organizar.");
     } finally {
       setIsAutoOrganizing(false);
     }
@@ -134,8 +134,7 @@ const App: React.FC = () => {
     return items.reduce((acc, item) => acc + (Number(item.price || 0) * Number(item.quantity || 1)), 0);
   }, [items]);
 
-  // Fix: Explicitly type groupedItems to ensure TypeScript recognizes the structure during rendering.
-  const groupedItems: Record<string, ShoppingItem[]> = useMemo(() => {
+  const groupedItems = useMemo<Record<string, ShoppingItem[]>>(() => {
     const groups: Record<string, ShoppingItem[]> = {};
     items.forEach(item => {
       const category = (item.category as string) || 'Outros';
@@ -145,8 +144,8 @@ const App: React.FC = () => {
     return groups;
   }, [items]);
 
-  // Fix: Explicitly type chartData to prevent it being inferred as 'unknown', which was causing property access errors.
-  const chartData: { name: string; value: number }[] = useMemo(() => {
+  // Fix: Explicitly type the useMemo return value to avoid 'unknown' type errors in JSX at line 311 and 317.
+  const chartData = useMemo<{ name: string; value: number }[]>(() => {
     const categoriesMap: Record<string, number> = {};
     items.forEach(item => {
       const cat = (item.category as string) || 'Outros';
@@ -235,7 +234,7 @@ const App: React.FC = () => {
             </div>
 
             {aiError ? (
-              <div className="bg-white p-6 rounded-xl border-2 border-red-200 relative z-10 shadow-lg">
+              <div className="bg-white p-6 rounded-xl border-2 border-red-200 relative z-10 shadow-lg animate-in fade-in slide-in-from-bottom-2">
                 <div className="flex items-start gap-4">
                   <div className="bg-red-50 p-3 rounded-full">
                     <AlertTriangleIcon className="w-6 h-6 text-red-600" />
@@ -250,6 +249,14 @@ const App: React.FC = () => {
                       >
                         <RotateCcwIcon className="w-3 h-3" /> TENTAR NOVAMENTE
                       </button>
+                      <a 
+                        href="https://app.netlify.com" 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="bg-slate-100 text-slate-700 text-[10px] font-black px-4 py-2 rounded-lg hover:bg-slate-200 flex items-center gap-1.5"
+                      >
+                        <ExternalLinkIcon className="w-3 h-3" /> IR PARA NETLIFY
+                      </a>
                     </div>
                   </div>
                 </div>
