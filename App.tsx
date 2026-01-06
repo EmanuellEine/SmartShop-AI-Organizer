@@ -12,7 +12,10 @@ import {
   XCircleIcon,
   LayoutGridIcon,
   ArrowRightIcon,
-  Loader2Icon
+  Loader2Icon,
+  AlertTriangleIcon,
+  RotateCcwIcon,
+  ExternalLinkIcon
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
@@ -23,45 +26,36 @@ const App: React.FC = () => {
   const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [isAutoOrganizing, setIsAutoOrganizing] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<{title: string, message: string} | null>(null);
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem('smart_shop_list');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) setItems(parsed);
+        if (Array.isArray(parsed)) setItems(parsed as ShoppingItem[]);
       }
     } catch (e) {
-      console.error("Erro ao carregar do storage:", e);
+      console.error("Erro ao carregar dados locais:", e);
     }
   }, []);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('smart_shop_list', JSON.stringify(items));
-    } catch (e) {
-      console.error("Erro ao salvar no storage:", e);
-    }
+    localStorage.setItem('smart_shop_list', JSON.stringify(items));
   }, [items]);
 
   const addItem = useCallback(() => {
     if (!newItemName.trim()) return;
-    try {
-      const newItem: ShoppingItem = {
-        id: crypto.randomUUID(),
-        name: newItemName,
-        price: 0,
-        quantity: 1,
-        category: newItemCategory,
-        checked: false
-      };
-      setItems(prev => [...prev, newItem]);
-      setNewItemName('');
-    } catch (e) {
-      setError("Erro ao adicionar item. Verifique se seu navegador é moderno.");
-    }
+    const newItem: ShoppingItem = {
+      id: crypto.randomUUID(),
+      name: newItemName,
+      price: 0,
+      quantity: 1,
+      category: newItemCategory,
+      checked: false
+    };
+    setItems(prev => [...prev, newItem]);
+    setNewItemName('');
   }, [newItemName, newItemCategory]);
 
   const toggleItem = (id: string) => {
@@ -78,13 +72,28 @@ const App: React.FC = () => {
 
   const handleFetchSuggestions = async () => {
     setLoadingSuggestions(true);
+    setAiError(null);
     try {
       const result = await getForgottenSuggestions(items);
-      if (Array.isArray(result)) {
-        setSuggestions(result);
+      setSuggestions(Array.isArray(result) ? result : []);
+    } catch (e: any) {
+      console.error("Falha na busca de sugestões:", e);
+      if (e.message === "API_KEY_MISSING" || !process.env.API_KEY) {
+        setAiError({
+          title: "Chave API não encontrada",
+          message: "Se você estiver no GitHub Pages, lembre-se que variáveis de ambiente precisam ser injetadas via GitHub Actions ou hardcoded (não recomendado)."
+        });
+      } else if (e.message === "API_KEY_INVALID") {
+        setAiError({
+          title: "Chave API Inválida",
+          message: "A chave configurada parece não ser válida ou não tem acesso ao modelo Gemini."
+        });
+      } else {
+        setAiError({
+          title: "Erro de Conexão",
+          message: "Ocorreu um problema ao falar com a IA. Verifique sua internet."
+        });
       }
-    } catch (e) {
-      console.error("Erro na IA:", e);
     } finally {
       setLoadingSuggestions(false);
     }
@@ -95,13 +104,13 @@ const App: React.FC = () => {
     setIsAutoOrganizing(true);
     try {
       const categorizations = await autoCategorizeItems(items);
-      if (Array.isArray(categorizations)) {
+      if (Array.isArray(categorizations) && categorizations.length > 0) {
         setItems(prev => prev.map(item => {
-          const match = categorizations.find(c => c.id === item.id);
+          const match = (categorizations as { id: string, category: Category }[]).find(c => c.id === item.id);
           return match ? { ...item, category: match.category as Category } : item;
         }));
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Erro na organização:", e);
     } finally {
       setIsAutoOrganizing(false);
@@ -125,7 +134,8 @@ const App: React.FC = () => {
     return items.reduce((acc, item) => acc + (Number(item.price || 0) * Number(item.quantity || 1)), 0);
   }, [items]);
 
-  const groupedItems = useMemo<Record<string, ShoppingItem[]>>(() => {
+  // Fix: Explicitly type groupedItems to ensure TypeScript recognizes the structure during rendering.
+  const groupedItems: Record<string, ShoppingItem[]> = useMemo(() => {
     const groups: Record<string, ShoppingItem[]> = {};
     items.forEach(item => {
       const category = (item.category as string) || 'Outros';
@@ -135,7 +145,7 @@ const App: React.FC = () => {
     return groups;
   }, [items]);
 
-  // Fix: Explicitly typing the variable to avoid 'unknown' type issues in JSX which causes errors at line 309 and 315
+  // Fix: Explicitly type chartData to prevent it being inferred as 'unknown', which was causing property access errors.
   const chartData: { name: string; value: number }[] = useMemo(() => {
     const categoriesMap: Record<string, number> = {};
     items.forEach(item => {
@@ -150,23 +160,8 @@ const App: React.FC = () => {
 
   const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6', '#f97316'];
 
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full text-center">
-          <XCircleIcon className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold mb-2">Ops! Algo deu errado</h2>
-          <p className="text-slate-500 mb-6">{error}</p>
-          <button onClick={() => window.location.reload()} className="bg-emerald-500 text-white px-6 py-2 rounded-xl font-bold">
-            Recarregar Site
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-32">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 pb-32">
       <header className="bg-white/90 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 px-4 h-16 md:px-8 flex items-center">
         <div className="max-w-5xl w-full mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -178,22 +173,14 @@ const App: React.FC = () => {
             </h1>
           </div>
           
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={handleAutoOrganize}
-              disabled={isAutoOrganizing || items.length === 0}
-              className="hidden sm:flex items-center gap-2 px-4 py-2 text-sm font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-all disabled:opacity-50 h-10 border border-indigo-100"
-            >
-              {isAutoOrganizing ? <Loader2Icon className="w-4 h-4 animate-spin" /> : <LayoutGridIcon className="w-4 h-4" />}
-              Organizar Tudo
-            </button>
-            <button 
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="md:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
-            >
-              <ChartPieIcon className="w-6 h-6" />
-            </button>
-          </div>
+          <button 
+            onClick={handleAutoOrganize}
+            disabled={isAutoOrganizing || items.length === 0}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-all disabled:opacity-50 h-10 border border-indigo-100 active:scale-95"
+          >
+            {isAutoOrganizing ? <Loader2Icon className="w-4 h-4 animate-spin" /> : <LayoutGridIcon className="w-4 h-4" />}
+            <span className="hidden sm:inline">Organizar Tudo</span>
+          </button>
         </div>
       </header>
 
@@ -231,7 +218,7 @@ const App: React.FC = () => {
             </div>
           </section>
 
-          <section className="bg-emerald-50 border border-emerald-100 p-6 rounded-2xl shadow-sm relative overflow-hidden group">
+          <section className="bg-emerald-50 border border-emerald-100 p-6 rounded-2xl shadow-sm relative overflow-hidden group min-h-[140px] flex flex-col justify-center">
             <div className="flex items-center justify-between mb-4 relative z-10">
               <h2 className="text-sm font-bold text-emerald-800 uppercase tracking-widest flex items-center gap-2">
                 <SparklesIcon className="w-4 h-4 text-emerald-500" />
@@ -240,21 +227,40 @@ const App: React.FC = () => {
               <button
                 onClick={handleFetchSuggestions}
                 disabled={loadingSuggestions}
-                className="text-xs font-bold text-emerald-600 hover:text-emerald-700 disabled:opacity-50 flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm transition-all"
+                className="text-xs font-bold text-emerald-600 hover:text-emerald-700 disabled:opacity-50 flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm transition-all active:scale-95"
               >
                 {loadingSuggestions ? <Loader2Icon className="w-3 h-3 animate-spin" /> : <ArrowRightIcon className="w-3 h-3" />}
                 O QUE FALTA?
               </button>
             </div>
 
-            {suggestions.length > 0 ? (
+            {aiError ? (
+              <div className="bg-white p-6 rounded-xl border-2 border-red-200 relative z-10 shadow-lg">
+                <div className="flex items-start gap-4">
+                  <div className="bg-red-50 p-3 rounded-full">
+                    <AlertTriangleIcon className="w-6 h-6 text-red-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-black text-red-800 text-sm uppercase tracking-tight">{aiError.title}</h4>
+                    <p className="text-xs text-slate-600 mt-1 leading-relaxed font-medium">{aiError.message}</p>
+                    <div className="mt-4 flex gap-3">
+                      <button 
+                        onClick={handleFetchSuggestions}
+                        className="bg-red-600 text-white text-[10px] font-black px-4 py-2 rounded-lg hover:bg-red-700 flex items-center gap-1.5"
+                      >
+                        <RotateCcwIcon className="w-3 h-3" /> TENTAR NOVAMENTE
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : suggestions.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 relative z-10">
                 {suggestions.map((s, idx) => (
                   <div key={idx} className="bg-white p-4 rounded-xl border border-emerald-200 flex items-start justify-between group/card hover:border-emerald-400 transition-all shadow-sm">
                     <div className="flex-1 pr-2">
                       <p className="font-bold text-slate-800 text-sm">{s.name}</p>
-                      <p className="text-[10px] font-extrabold text-slate-400 uppercase mt-0.5">{s.category}</p>
-                      <p className="text-[10px] text-emerald-600 italic mt-1 leading-tight line-clamp-2">{s.reason}</p>
+                      <p className="text-[10px] text-emerald-600 italic mt-1 leading-tight">{s.reason}</p>
                     </div>
                     <button
                       onClick={() => addSuggestion(s)}
@@ -266,40 +272,29 @@ const App: React.FC = () => {
                 ))}
               </div>
             ) : !loadingSuggestions && (
-              <div className="text-center py-6 text-slate-500 relative z-10">
-                <p className="text-xs font-medium italic">
+              <div className="text-center py-4 text-slate-500 relative z-10">
+                <p className="text-xs font-medium italic opacity-60">
                   {items.length === 0 ? "Adicione itens para receber sugestões personalizadas." : "Clique em 'O que falta?' para ver recomendações."}
                 </p>
               </div>
             )}
             
             {loadingSuggestions && (
-              <div className="flex flex-col items-center justify-center py-8 space-y-3 relative z-10">
-                <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-                <p className="text-emerald-700 text-xs font-bold uppercase tracking-widest">Analisando sua lista...</p>
+              <div className="flex flex-col items-center justify-center py-4 space-y-2 relative z-10">
+                <Loader2Icon className="w-6 h-6 text-emerald-500 animate-spin" />
+                <p className="text-emerald-700 text-[10px] font-black uppercase tracking-widest">Analisando sua lista...</p>
               </div>
             )}
           </section>
 
           <section className="space-y-6">
-            <div className="flex items-center justify-between px-2">
-              <h2 className="text-lg font-black text-slate-800">Sua Lista</h2>
-              {items.length > 0 && (
-                <button 
-                  onClick={() => setItems([])}
-                  className="text-xs font-bold text-red-500 hover:text-red-600 flex items-center gap-1 bg-red-50 px-2 py-1 rounded-md"
-                >
-                  LIMPAR TUDO
-                </button>
-              )}
-            </div>
-            
+            <h2 className="text-lg font-black text-slate-800 px-2">Sua Lista</h2>
             {items.length === 0 ? (
               <div className="bg-white p-12 rounded-3xl border-2 border-dashed border-slate-200 text-center space-y-4">
                 <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto border border-slate-100">
                   <ShoppingCartIcon className="w-10 h-10 text-slate-200" />
                 </div>
-                <p className="text-slate-400 text-sm font-medium">Seu carrinho está esperando por produtos!</p>
+                <p className="text-slate-400 text-sm font-medium">Seu carrinho está vazio!</p>
               </div>
             ) : (
               <div className="space-y-8">
@@ -316,7 +311,7 @@ const App: React.FC = () => {
                       {catItems.map(item => (
                         <div 
                           key={item.id}
-                          className={`flex flex-col sm:flex-row items-center gap-4 bg-white p-4 rounded-2xl border shadow-sm transition-all hover:shadow-md ${item.checked ? 'border-emerald-100 bg-emerald-50/10 opacity-60' : 'border-slate-200'}`}
+                          className={`flex flex-col sm:flex-row items-center gap-4 bg-white p-4 rounded-2xl border transition-all ${item.checked ? 'border-emerald-100 bg-emerald-50/10 opacity-60' : 'border-slate-200'}`}
                         >
                           <button 
                             onClick={() => toggleItem(item.id)}
@@ -333,36 +328,21 @@ const App: React.FC = () => {
 
                           <div className="flex items-center gap-4 w-full sm:w-auto">
                             <div className="flex items-center bg-slate-50 border border-slate-100 rounded-xl p-1">
-                              <button 
-                                onClick={() => updateItem(item.id, { quantity: Math.max(1, (item.quantity || 1) - 1) })}
-                                className="w-8 h-8 flex items-center justify-center hover:bg-white rounded-lg transition-all text-slate-500 font-black text-lg"
-                              >
-                                -
-                              </button>
-                              <span className="w-8 text-center text-sm font-black text-slate-700">{item.quantity}</span>
-                              <button 
-                                onClick={() => updateItem(item.id, { quantity: (item.quantity || 1) + 1 })}
-                                className="w-8 h-8 flex items-center justify-center hover:bg-white rounded-lg transition-all text-slate-500 font-black text-lg"
-                              >
-                                +
-                              </button>
+                              <button onClick={() => updateItem(item.id, { quantity: Math.max(1, item.quantity - 1) })} className="w-8 h-8 flex items-center justify-center hover:bg-white rounded-lg">-</button>
+                              <span className="w-8 text-center text-sm font-black">{item.quantity}</span>
+                              <button onClick={() => updateItem(item.id, { quantity: item.quantity + 1 })} className="w-8 h-8 flex items-center justify-center hover:bg-white rounded-lg">+</button>
                             </div>
-
-                            <div className="relative flex-1 sm:w-32">
-                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] font-black">R$</span>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400">R$</span>
                               <input
                                 type="number"
                                 step="0.01"
-                                placeholder="0,00"
-                                className="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                                className="w-24 pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-emerald-500"
                                 value={item.price === 0 ? '' : item.price}
                                 onChange={(e) => updateItem(item.id, { price: parseFloat(e.target.value) || 0 })}
                               />
                             </div>
-
-                            <button onClick={() => removeItem(item.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
-                              <TrashIcon className="w-5 h-5" />
-                            </button>
+                            <button onClick={() => removeItem(item.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors"><TrashIcon className="w-5 h-5" /></button>
                           </div>
                         </div>
                       ))}
@@ -374,110 +354,61 @@ const App: React.FC = () => {
           </section>
         </div>
 
-        <aside className={`lg:block ${isSidebarOpen ? 'fixed inset-0 z-50 bg-white p-8 overflow-y-auto' : 'hidden'}`}>
-          <div className="sticky top-24 space-y-6">
-            {isSidebarOpen && (
-              <button onClick={() => setIsSidebarOpen(false)} className="mb-8 flex items-center gap-2 text-slate-800 font-black text-sm uppercase tracking-widest">
-                <XCircleIcon className="w-6 h-6 text-red-500" /> FECHAR RESUMO
-              </button>
+        <aside className="space-y-6">
+          <div className="bg-slate-900 rounded-[2rem] p-8 text-white shadow-xl relative overflow-hidden">
+            <h3 className="text-slate-500 text-[10px] font-black uppercase tracking-[0.3em] mb-1">Previsão Total</h3>
+            <div className="flex items-baseline gap-1 mb-8">
+              <span className="text-xl font-black text-emerald-500">R$</span>
+              <p className="text-5xl font-black tracking-tighter">
+                {totalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            </div>
+            
+            <div className="space-y-4 pt-6 border-t border-slate-800">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Progresso</span>
+                <span className="text-emerald-400 font-black text-sm">
+                  {items.length > 0 ? Math.round((items.filter(i => i.checked).length / items.length) * 100) : 0}%
+                </span>
+              </div>
+              <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-emerald-500 transition-all duration-700" 
+                  style={{ width: `${items.length > 0 ? (items.filter(i => i.checked).length / items.length) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-[2rem] p-6 border border-slate-200 shadow-sm">
+            <h3 className="font-black text-slate-800 text-xs uppercase tracking-widest mb-6 flex items-center gap-2">
+              <ChartPieIcon className="w-4 h-4 text-indigo-500" />
+              Gastos por Categoria
+            </h3>
+            
+            {chartData && chartData.length > 0 ? (
+              <div className="h-48 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={chartData} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={5} dataKey="value">
+                      {chartData.map((_, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip formatter={(value: number) => `R$ ${value.toFixed(2)}`} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="text-center py-10 text-slate-300 text-[10px] font-black uppercase tracking-widest italic border border-dashed border-slate-100 rounded-2xl">Sem dados</p>
             )}
-
-            <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden group">
-              <div className="relative z-10">
-                <h3 className="text-slate-500 text-[10px] font-black mb-1 uppercase tracking-[0.3em]">Previsão Total</h3>
-                <div className="flex items-baseline gap-1 mb-10">
-                  <span className="text-xl font-black text-emerald-500">R$</span>
-                  <p className="text-5xl font-black tracking-tighter">
-                    {totalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                </div>
-                
-                <div className="space-y-6 pt-10 border-t border-slate-800">
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Total de Itens</span>
-                    <span className="font-black text-lg">{items.reduce((acc, i) => acc + (i.quantity || 1), 0)}</span>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-500">
-                      <span>Progresso</span>
-                      <span className="text-emerald-400">
-                        {items.length > 0 ? Math.round((items.filter(i => i.checked).length / items.length) * 100) : 0}%
-                      </span>
-                    </div>
-                    <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-emerald-500 transition-all duration-1000 ease-out" 
-                        style={{ width: `${items.length > 0 ? (items.filter(i => i.checked).length / items.length) * 100 : 0}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-[2rem] p-8 border border-slate-200 shadow-sm">
-              <h3 className="font-black text-slate-800 text-xs uppercase tracking-widest mb-8 flex items-center gap-2">
-                <ChartPieIcon className="w-4 h-4 text-indigo-500" />
-                Gastos por Categoria
-              </h3>
-              
-              {chartData && chartData.length > 0 ? (
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={chartData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={65}
-                        outerRadius={85}
-                        paddingAngle={8}
-                        dataKey="value"
-                        stroke="none"
-                      >
-                        {chartData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip 
-                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', fontWeight: '800' }}
-                        formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Total']}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <div className="text-center py-12 text-slate-300 text-xs font-bold uppercase tracking-widest italic border border-dashed border-slate-100 rounded-2xl">
-                  Sem dados para exibir
-                </div>
-              )}
-
-              <div className="mt-6 space-y-3">
-                {chartData && chartData.map((data: { name: string; value: number }, idx: number) => (
-                  <div key={data.name} className="flex items-center justify-between group">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
-                      <span className="text-slate-500 text-[10px] font-black uppercase tracking-tight group-hover:text-slate-800 transition-colors">{data.name}</span>
-                    </div>
-                    <span className="text-slate-900 font-black text-xs">R$ {data.value.toFixed(2)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         </aside>
       </main>
 
       <div className="lg:hidden fixed bottom-6 left-6 right-6 z-40 bg-white/95 backdrop-blur-xl border border-slate-200 p-5 rounded-[2rem] shadow-2xl flex items-center justify-between">
         <div>
-          <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest mb-0.5">Previsão</p>
-          <p className="text-2xl font-black text-slate-900 leading-none">
-            R$ {totalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </p>
+          <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Total</p>
+          <p className="text-2xl font-black text-slate-900">R$ {totalPrice.toFixed(2)}</p>
         </div>
-        <button onClick={() => setIsSidebarOpen(true)} className="bg-slate-900 text-white h-14 w-14 rounded-2xl flex items-center justify-center shadow-xl active:scale-90 transition-transform">
-          <ChartPieIcon className="w-6 h-6" />
-        </button>
       </div>
     </div>
   );

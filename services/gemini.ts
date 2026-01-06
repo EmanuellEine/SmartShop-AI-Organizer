@@ -2,19 +2,16 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Category, ShoppingItem, AISuggestion } from "../types";
 
+// Always use the environment variable directly as per guidelines.
 export const getForgottenSuggestions = async (currentItems: ShoppingItem[]): Promise<AISuggestion[]> => {
+  // Creating a new instance right before the call to ensure the latest API key is used.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const itemNames = currentItems.map(item => item.name).join(", ");
-  
-  const prompt = `
-    Com base na seguinte lista de compras atual: [${itemNames}].
+  const prompt = `Com base na seguinte lista de compras atual: [${itemNames || 'lista vazia'}].
     Sugira 5 itens adicionais que o usuário possa ter esquecido de comprar. 
-    Considere combinações comuns (ex: se tem café, talvez falte açúcar ou leite).
-    Retorne as sugestões em formato JSON seguindo o esquema fornecido.
-  `;
+    Considere combinações comuns e itens básicos de casa.`;
 
   try {
-    // Inicialização interna para maior resiliência em ambientes de produção
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
@@ -29,9 +26,8 @@ export const getForgottenSuggestions = async (currentItems: ShoppingItem[]): Pro
               category: { 
                 type: Type.STRING,
                 enum: Object.values(Category),
-                description: "A categoria correta para o item."
               },
-              reason: { type: Type.STRING, description: "Breve explicação do porquê sugeriu este item" }
+              reason: { type: Type.STRING }
             },
             required: ["name", "category", "reason"]
           }
@@ -39,28 +35,32 @@ export const getForgottenSuggestions = async (currentItems: ShoppingItem[]): Pro
       }
     });
 
+    // Accessing .text property directly as per latest SDK guidelines.
     const text = response.text;
     if (!text) return [];
-    return JSON.parse(text) as AISuggestion[];
-  } catch (error) {
-    console.error("Erro ao obter sugestões do Gemini:", error);
-    return [];
+    
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) ? (parsed as AISuggestion[]) : [];
+  } catch (error: any) {
+    // Handling potential invalid API key errors gracefully.
+    if (error.message?.includes("Requested entity was not found")) {
+      throw new Error("API_KEY_INVALID");
+    }
+    console.error("Erro na API Gemini:", error);
+    throw error;
   }
 };
 
 export const autoCategorizeItems = async (items: ShoppingItem[]): Promise<{ id: string, category: Category }[]> => {
+  // Initializing the SDK with the required configuration.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  if (items.length === 0) return [];
+
   const itemsToProcess = items.map(i => ({ id: i.id, name: i.name }));
-  const prompt = `
-    Classifique os seguintes itens de supermercado nas categorias corretas.
-    Categorias disponíveis: ${Object.values(Category).join(", ")}.
-    
-    Itens: ${JSON.stringify(itemsToProcess)}
-    
-    Retorne apenas um array JSON de objetos com { "id": string, "category": string }.
-  `;
+  const prompt = `Classifique estes itens de supermercado nas categorias: ${Object.values(Category).join(", ")}.
+    Itens: ${JSON.stringify(itemsToProcess)}`;
 
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
@@ -82,9 +82,11 @@ export const autoCategorizeItems = async (items: ShoppingItem[]): Promise<{ id: 
 
     const text = response.text;
     if (!text) return [];
-    return JSON.parse(text) as { id: string, category: Category }[];
-  } catch (error) {
-    console.error("Erro ao auto-categorizar:", error);
-    return [];
+
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) ? (parsed as { id: string, category: Category }[]) : [];
+  } catch (error: any) {
+    console.error("Erro na categorização:", error);
+    throw error;
   }
 };
