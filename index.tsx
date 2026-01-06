@@ -1,22 +1,30 @@
 
 import React from 'react';
-import ReactDOM from 'react-dom/client';
+import { createRoot } from 'react-dom/client';
 import App from './App';
 
-const rootElement = document.getElementById('root');
+console.log("🚀 SmartShop AI: Inicializando...");
 
-if (!rootElement) {
-  console.error("ERRO CRÍTICO: Elemento #root não encontrado no DOM.");
-} else {
-  try {
-    const root = ReactDOM.createRoot(rootElement);
-    root.render(
-      <React.StrictMode>
-        <App />
-      </React.StrictMode>
-    );
-  } catch (err) {
-    console.error("Erro ao inicializar o React:", err);
-    rootElement.innerHTML = `<div style="padding: 20px; color: red;">Erro ao carregar aplicação. Verifique o console.</div>`;
-  }
+const container = document.getElementById('root');
+
+if (!container) {
+  throw new Error("Elemento #root não encontrado no HTML.");
+}
+
+try {
+  const root = createRoot(container);
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+  console.log("✅ SmartShop AI: Renderizado com sucesso.");
+} catch (error) {
+  console.error("❌ SmartShop AI: Erro na renderização:", error);
+  container.innerHTML = `
+    <div style="padding: 20px; color: #ef4444; text-align: center;">
+      <h3>Erro Fatal</h3>
+      <p>${error instanceof Error ? error.message : "Erro desconhecido"}</p>
+    </div>
+  `;
 }
